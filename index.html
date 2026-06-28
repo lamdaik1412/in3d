@@ -8,7 +8,23 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app-shell">
+  <section id="loginScreen" class="login-screen">
+    <div class="login-art">
+      <div class="login-brand"><span class="brand-mark">X</span><div><strong>XƯỞNG NHỎ</strong><small>Cost studio · Shared workspace</small></div></div>
+      <div class="login-message"><span class="eyebrow">CHI PHÍ RÕ RÀNG</span><h1>Một xưởng.<br>Nhiều người cùng làm.</h1><p>Vật tư, định mức, giờ máy và giá bán được đồng bộ cho cả gia đình — không còn chuyền tay một file Excel.</p></div>
+      <div class="login-orbit"><i></i><i></i><i></i><span>₫</span></div>
+    </div>
+    <div class="login-panel">
+      <div class="login-card">
+        <span class="eyebrow">ĐĂNG NHẬP XƯỞNG</span><h2>Chào mừng quay lại</h2><p id="loginIntro">Dùng tài khoản Google để mở workspace của bạn.</p>
+        <div id="inviteNotice" class="invite-notice" hidden><strong>Bạn có lời mời vào xưởng</strong><span>Đăng nhập đúng email được mời để tham gia.</span></div>
+        <button id="loginGoogleBtn" class="google-button"><span>G</span>Tiếp tục với Google</button>
+        <p id="loginStatus" class="login-status">Dữ liệu được bảo vệ riêng theo thành viên.</p>
+      </div>
+    </div>
+  </section>
+
+  <div id="appShell" class="app-shell is-hidden">
     <aside class="sidebar">
       <button class="brand" data-view="dashboard" aria-label="Về tổng quan">
         <span class="brand-mark">X</span>
@@ -19,6 +35,7 @@
         <button class="nav-item active" data-view="dashboard"><span class="icon">⌂</span>Tổng quan</button>
         <button class="nav-item" data-view="products"><span class="icon">◇</span>Mẫu sản phẩm<span id="productCountPill" class="pill"></span></button>
         <button class="nav-item" data-view="materials"><span class="icon">▦</span>Kho vật tư<span id="materialCountPill" class="pill"></span></button>
+        <button class="nav-item" data-view="members"><span class="icon">◎</span>Thành viên<span id="memberCountPill" class="pill">1</span></button>
       </nav>
 
       <div class="sidebar-note">
@@ -43,6 +60,7 @@
       <section id="productsView" class="view"></section>
       <section id="editorView" class="view"></section>
       <section id="materialsView" class="view"></section>
+      <section id="membersView" class="view"></section>
     </main>
   </div>
 

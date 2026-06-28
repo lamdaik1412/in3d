@@ -1,41 +1,48 @@
-# Kết nối Firebase
+# Firebase + workspace gia đình
 
-Ứng dụng đã được cấu hình cho project `in3d-project`.
+Ứng dụng dùng project `in3d-project` và mô hình workspace dùng chung.
 
-## 1. Bật Google Authentication
+## Bắt buộc: cập nhật Firestore Rules
+
+1. Firebase Console → Firestore Database → Rules.
+2. Xoá rules cũ.
+3. Dán toàn bộ nội dung file `firestore.rules`.
+4. Bấm Publish.
+
+Rules mới cho phép:
+
+- Mỗi người dùng quản lý hồ sơ riêng.
+- Thành viên trong cùng workspace đọc chung dữ liệu.
+- Owner/editor được sửa; viewer chỉ được xem.
+- Người được mời chỉ có thể tham gia bằng đúng email Google trong lời mời.
+- Đường dẫn `users/{uid}` cũ vẫn được đọc để tự động migrate dữ liệu.
+
+## Bật Google Authentication
 
 Firebase Console → Authentication → Sign-in method → Google → Enable → Save.
 
-## 2. Tạo Firestore
+## Cho phép domain GitHub Pages
 
-Firebase Console → Firestore Database → Create database → Production mode → chọn vị trí → Create.
+Authentication → Settings → Authorized domains → Add domain.
 
-Mở tab Rules, thay toàn bộ nội dung bằng nội dung trong `firestore.rules`, sau đó bấm Publish.
+Chỉ nhập hostname, ví dụ `ten-github.github.io`, không nhập `https://` hoặc đường dẫn repo.
 
-## 3. Cho phép domain GitHub Pages
+## Luồng sử dụng
 
-Sau khi có URL GitHub Pages, vào Authentication → Settings → Authorized domains → Add domain.
+1. Chủ xưởng đăng nhập lần đầu. App tự tạo workspace và chuyển dữ liệu cũ vào đó.
+2. Mở trang Thành viên.
+3. Nhập chính xác email Google của vợ/em, chọn quyền và tạo link.
+4. Gửi link đó cho đúng người.
+5. Người nhận mở link và đăng nhập đúng email được mời.
 
-Chỉ nhập hostname, ví dụ:
+## Cấu trúc dữ liệu
 
+```text
+workspaces/{workspaceId}
+  members/{uid}
+  app/data
+  images/{productId}
+
+users/{uid}/profile/main
+invites/{inviteToken}
 ```
-ten-github.github.io
-```
-
-Không nhập `https://`, đường dẫn repo hoặc dấu `/`.
-
-## 4. Chạy thử trên máy
-
-Đăng nhập Firebase không hoạt động khi mở trực tiếp bằng `file://`. Chạy thư mục qua HTTP:
-
-```powershell
-python -m http.server 4173 --directory .
-```
-
-Sau đó mở `http://localhost:4173` và thêm `localhost` vào Authorized domains nếu chưa có.
-
-## Dữ liệu được lưu ở đâu?
-
-- Dữ liệu chính: `users/{uid}/app/data`
-- Ảnh đã nén: `users/{uid}/images/{productId}`
-- `localStorage` vẫn được giữ làm bản dự phòng khi mất mạng hoặc chưa đăng nhập.

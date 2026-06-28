@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
-import { deleteDoc, doc, getDoc, getFirestore, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+import { arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, getFirestore, serverTimestamp, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 
 const STORAGE_KEY = "xuong-nho-cost-studio-v1";
 const firebaseConfig = {
@@ -19,6 +19,11 @@ const googleProvider = new GoogleAuthProvider();
 let currentUser = null;
 let cloudReady = false;
 let syncTimer = null;
+let activeWorkspaceId = null;
+let activeWorkspace = null;
+let currentMember = null;
+let workspaceMembers = [];
+const inviteTokenFromUrl = new URLSearchParams(location.search).get("invite");
 
 const seed = {
   materials: [
@@ -80,7 +85,7 @@ function totalInvestment(){ return state.materials.reduce((sum,m)=>sum+(Number(m
 function clone(data){ return JSON.parse(JSON.stringify(data)); }
 function loadState(){ try { const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)); if(saved?.materials?.length && saved?.products){saved.products.forEach(normalizeProduct);return saved;} } catch(e){} const fresh=clone(seed);fresh.products.forEach(normalizeProduct);return fresh; }
 function persistLocal(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){toast("Bộ nhớ ảnh đã đầy — hãy dùng ảnh nhẹ hơn");}}
-function saveState(){persistLocal();updatePills();if(currentUser&&cloudReady)scheduleCloudSync();}
+function saveState(){if(currentUser&&currentMember?.role==="viewer"){toast("Bạn đang có quyền chỉ xem");return;}persistLocal();updatePills();if(currentUser&&cloudReady)scheduleCloudSync();}
 function updatePills(){ $("#productCountPill").textContent=state.products.length; $("#materialCountPill").textContent=state.materials.length; }
 function toast(message){ const el=$("#toast");el.textContent=message;el.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.remove("show"),1900); }
 function compressImage(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=reject;reader.onload=()=>{const img=new Image();img.onerror=reject;img.onload=()=>{const max=720,scale=Math.min(1,max/Math.max(img.width,img.height)),canvas=document.createElement("canvas");canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);const ctx=canvas.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL("image/jpeg",.7));};img.src=reader.result;};reader.readAsDataURL(file);});}
@@ -88,24 +93,43 @@ function compressImage(file){return new Promise((resolve,reject)=>{const reader=
 function setSyncStatus(text,mode="local"){const el=$("#syncState");if(!el)return;el.lastChild.textContent=text;el.dataset.mode=mode;}
 function cloudPayload(){return {materials:clone(state.materials),products:state.products.map(({image,...p})=>({...clone(p),image:""})),updatedAt:serverTimestamp(),version:2};}
 function scheduleCloudSync(){clearTimeout(syncTimer);setSyncStatus("Đang chờ lưu…","saving");syncTimer=setTimeout(syncCloudState,650);}
-async function syncCloudState(){if(!currentUser||!cloudReady)return;setSyncStatus("Đang đồng bộ…","saving");try{await setDoc(doc(db,"users",currentUser.uid,"app","data"),cloudPayload());setSyncStatus("Đã đồng bộ","synced");}catch(error){console.error(error);setSyncStatus("Lỗi đồng bộ","error");toast(firebaseErrorMessage(error));}}
-async function syncImage(productId,dataUrl){if(!currentUser||!cloudReady)return;try{await setDoc(doc(db,"users",currentUser.uid,"images",productId),{dataUrl,updatedAt:serverTimestamp()});setSyncStatus("Đã đồng bộ","synced");}catch(error){console.error(error);toast(firebaseErrorMessage(error));}}
-async function removeCloudImage(productId){if(!currentUser||!cloudReady)return;try{await deleteDoc(doc(db,"users",currentUser.uid,"images",productId));}catch(error){console.error(error);}}
-async function loadCloudState(user){setSyncStatus("Đang tải cloud…","saving");cloudReady=false;try{const ref=doc(db,"users",user.uid,"app","data"),snap=await getDoc(ref);if(snap.exists()){const data=snap.data();state={materials:Array.isArray(data.materials)?data.materials:[],products:Array.isArray(data.products)?data.products:[]};state.products.forEach(normalizeProduct);await Promise.all(state.products.map(async p=>{const imageSnap=await getDoc(doc(db,"users",user.uid,"images",p.id));if(imageSnap.exists())p.image=normalizeProduct({...p,image:imageSnap.data().dataUrl}).image;}));persistLocal();updatePills();navigate(currentView,currentProductId);}else{cloudReady=true;await syncCloudState();for(const p of state.products)if(p.image)await syncImage(p.id,p.image);}cloudReady=true;setSyncStatus("Đã đồng bộ","synced");}catch(error){console.error(error);cloudReady=false;setSyncStatus("Cloud chưa kết nối","error");toast(firebaseErrorMessage(error));}}
-function updateAuthUI(user){const btn=$("#authBtn");if(!btn)return;if(user){btn.innerHTML=`${user.photoURL?`<img src="${escapeAttr(user.photoURL)}" alt="">`:""}<span>${escapeHtml(user.displayName||user.email||"Tài khoản")}</span><b>Đăng xuất</b>`;btn.dataset.signedIn="true";btn.title=user.email||"";}else{btn.textContent="Đăng nhập Google";btn.dataset.signedIn="false";btn.title="Đăng nhập để đồng bộ cloud";setSyncStatus("Lưu trên máy","local");}}
-function firebaseErrorMessage(error){const code=error?.code||"";if(code.includes("unauthorized-domain"))return "Hãy thêm domain GitHub Pages vào Authorized domains";if(code.includes("permission-denied"))return "Firestore đang chặn quyền — cần cập nhật Rules";if(code.includes("popup-blocked"))return "Trình duyệt đang chặn cửa sổ đăng nhập";if(code.includes("network"))return "Không có kết nối tới Firebase";return "Chưa đồng bộ được Firebase";}
+function workspaceDoc(...segments){return doc(db,"workspaces",activeWorkspaceId,...segments);}
+function canEdit(){return currentMember&&["owner","editor"].includes(currentMember.role);}
+async function syncCloudState(){if(!currentUser||!activeWorkspaceId||!cloudReady||!canEdit())return;setSyncStatus("Đang đồng bộ…","saving");try{await setDoc(workspaceDoc("app","data"),cloudPayload());setSyncStatus("Đã đồng bộ","synced");}catch(error){console.error(error);setSyncStatus("Lỗi đồng bộ","error");toast(firebaseErrorMessage(error));}}
+async function syncImage(productId,dataUrl){if(!currentUser||!activeWorkspaceId||!cloudReady||!canEdit())return;try{await setDoc(workspaceDoc("images",productId),{dataUrl,updatedAt:serverTimestamp()});setSyncStatus("Đã đồng bộ","synced");}catch(error){console.error(error);toast(firebaseErrorMessage(error));}}
+async function removeCloudImage(productId){if(!currentUser||!activeWorkspaceId||!cloudReady||!canEdit())return;try{await deleteDoc(workspaceDoc("images",productId));}catch(error){console.error(error);}}
+
+async function createWorkspace(user,profile={}){const workspaceId=crypto.randomUUID().replaceAll("-","").slice(0,20),name=`Xưởng của ${(user.displayName||"gia đình").split(" ").slice(-1)[0]}`;const batch=writeBatch(db);batch.set(doc(db,"workspaces",workspaceId),{name,ownerId:user.uid,createdAt:serverTimestamp()});batch.set(doc(db,"workspaces",workspaceId,"members",user.uid),{email:user.email||"",displayName:user.displayName||"",photoURL:user.photoURL||"",role:"owner",joinedAt:serverTimestamp()});batch.set(doc(db,"users",user.uid,"profile","main"),{email:user.email||"",displayName:user.displayName||"",photoURL:user.photoURL||"",activeWorkspaceId:workspaceId,workspaceIds:arrayUnion(workspaceId),updatedAt:serverTimestamp()},{merge:true});await batch.commit();return workspaceId;}
+
+async function redeemInvite(user,token){const inviteRef=doc(db,"invites",token),snap=await getDoc(inviteRef);if(!snap.exists())throw new Error("invite/not-found");const invite=snap.data(),userEmail=(user.email||"").toLowerCase();if(userEmail!==String(invite.email||"").toLowerCase())throw new Error("invite/wrong-email");const batch=writeBatch(db);batch.set(doc(db,"workspaces",invite.workspaceId,"members",user.uid),{email:user.email||"",displayName:user.displayName||"",photoURL:user.photoURL||"",role:invite.role||"editor",inviteToken:token,joinedAt:serverTimestamp()});batch.set(doc(db,"users",user.uid,"profile","main"),{email:user.email||"",displayName:user.displayName||"",photoURL:user.photoURL||"",activeWorkspaceId:invite.workspaceId,workspaceIds:arrayUnion(invite.workspaceId),updatedAt:serverTimestamp()},{merge:true});await batch.commit();history.replaceState({},"",location.pathname);return invite.workspaceId;}
+
+async function bootstrapWorkspace(user){cloudReady=false;showLoginLoading("Đang mở workspace…");try{const profileRef=doc(db,"users",user.uid,"profile","main"),profileSnap=await getDoc(profileRef);let profile=profileSnap.exists()?profileSnap.data():{},workspaceId=null;if(inviteTokenFromUrl){try{workspaceId=await redeemInvite(user,inviteTokenFromUrl);}catch(inviteError){console.error(inviteError);if(inviteError.message==="invite/wrong-email")throw new Error("invite/wrong-email");}}workspaceId=workspaceId||profile.activeWorkspaceId;if(!workspaceId)workspaceId=await createWorkspace(user,profile);await loadWorkspace(user,workspaceId);showApp();}catch(error){console.error(error);showLogin();$("#loginStatus").textContent=firebaseErrorMessage(error);}}
+
+async function loadWorkspace(user,workspaceId){activeWorkspaceId=workspaceId;const workspaceSnap=await getDoc(doc(db,"workspaces",workspaceId)),memberSnap=await getDoc(doc(db,"workspaces",workspaceId,"members",user.uid));if(!workspaceSnap.exists()||!memberSnap.exists())throw new Error("workspace/no-access");activeWorkspace={id:workspaceId,...workspaceSnap.data()};currentMember=memberSnap.data();setSyncStatus("Đang tải xưởng…","saving");const dataRef=doc(db,"workspaces",workspaceId,"app","data"),dataSnap=await getDoc(dataRef);if(dataSnap.exists()){await applyCloudData(dataSnap.data(),workspaceId);}else if(currentMember.role==="owner"){const legacySnap=await getDoc(doc(db,"users",user.uid,"app","data"));if(legacySnap.exists())await applyCloudData(legacySnap.data(),workspaceId);cloudReady=true;await syncCloudState();for(const p of state.products)if(p.image)await syncImage(p.id,p.image);}cloudReady=true;await loadMembers();updateWorkspaceUI();setSyncStatus("Đã đồng bộ","synced");navigate("dashboard");}
+
+async function applyCloudData(data,workspaceId){state={materials:Array.isArray(data.materials)?data.materials:[],products:Array.isArray(data.products)?data.products:[]};state.products.forEach(normalizeProduct);await Promise.all(state.products.map(async p=>{let imageSnap=await getDoc(doc(db,"workspaces",workspaceId,"images",p.id));if(!imageSnap.exists()&&currentUser)imageSnap=await getDoc(doc(db,"users",currentUser.uid,"images",p.id));if(imageSnap.exists())p.image=normalizeProduct({...p,image:imageSnap.data().dataUrl}).image;}));persistLocal();updatePills();}
+
+async function loadMembers(){if(!activeWorkspaceId)return;const snap=await getDocs(collection(db,"workspaces",activeWorkspaceId,"members"));workspaceMembers=snap.docs.map(d=>({id:d.id,...d.data()}));$("#memberCountPill").textContent=workspaceMembers.length;}
+function updateWorkspaceUI(){const btn=$("#authBtn");btn.innerHTML=`${currentUser?.photoURL?`<img src="${escapeAttr(currentUser.photoURL)}" alt="">`:""}<span>${escapeHtml(activeWorkspace?.name||"Xưởng")}</span><b>Đăng xuất</b>`;btn.dataset.signedIn="true";btn.title=currentUser?.email||"";$(".sidebar-note strong").textContent=activeWorkspace?.name||"Workspace";$(".sidebar-note small").textContent=currentMember?.role==="viewer"?"Quyền chỉ xem":"Đang đồng bộ cho cả nhóm";}
+function showLogin(){$("#loginScreen").classList.remove("is-hidden");$("#appShell").classList.add("is-hidden");$("#loginGoogleBtn").disabled=false;$("#loginStatus").textContent="Dữ liệu được bảo vệ riêng theo thành viên.";}
+function showLoginLoading(message){showLogin();$("#loginGoogleBtn").disabled=true;$("#loginStatus").textContent=message;}
+function showApp(){$("#loginScreen").classList.add("is-hidden");$("#appShell").classList.remove("is-hidden");}
+function firebaseErrorMessage(error){const code=error?.code||error?.message||"";if(code.includes("wrong-email"))return "Bạn đang đăng nhập khác email được mời";if(code.includes("not-found"))return "Link mời không còn hợp lệ";if(code.includes("no-access"))return "Tài khoản chưa có quyền vào workspace này";if(code.includes("unauthorized-domain"))return "Hãy thêm domain GitHub Pages vào Authorized domains";if(code.includes("permission-denied"))return "Firestore Rules chưa được cập nhật cho workspace";if(code.includes("popup-blocked"))return "Trình duyệt đang chặn cửa sổ đăng nhập";if(code.includes("network"))return "Không có kết nối tới Firebase";return "Chưa kết nối được workspace";}
 
 function navigate(view, productId){
   currentView=view; currentProductId=productId || currentProductId;
   $$(".view").forEach(v=>v.classList.remove("active"));
   $$(".nav-item").forEach(n=>n.classList.toggle("active",n.dataset.view===view || (view==="editor"&&n.dataset.view==="products")));
-  const map={dashboard:"dashboardView",products:"productsView",materials:"materialsView",editor:"editorView"};
+  const map={dashboard:"dashboardView",products:"productsView",materials:"materialsView",members:"membersView",editor:"editorView"};
   $("#"+map[view]).classList.add("active");
-  const crumbs={dashboard:"Tổng quan",products:"Mẫu sản phẩm",materials:"Kho vật tư",editor:`Mẫu sản phẩm / <strong>${escapeHtml(state.products.find(p=>p.id===currentProductId)?.name||"Chỉnh sửa")}</strong>`};
+  const crumbs={dashboard:"Tổng quan",products:"Mẫu sản phẩm",materials:"Kho vật tư",members:"Thành viên",editor:`Mẫu sản phẩm / <strong>${escapeHtml(state.products.find(p=>p.id===currentProductId)?.name||"Chỉnh sửa")}</strong>`};
   $("#breadcrumb").innerHTML=crumbs[view];
-  if(view==="dashboard") renderDashboard(); if(view==="products") renderProducts(); if(view==="materials") renderMaterials(); if(view==="editor") renderEditor();
+  if(view==="dashboard") renderDashboard(); if(view==="products") renderProducts(); if(view==="materials") renderMaterials(); if(view==="members") renderMembers(); if(view==="editor") renderEditor();
+  applyRolePermissions();
   $(".sidebar").classList.remove("open"); window.scrollTo({top:0,behavior:"smooth"});
 }
+
+function applyRolePermissions(){const viewer=currentMember?.role==="viewer";document.body.classList.toggle("viewer-mode",viewer);$("#quickAddBtn").disabled=viewer;if(!viewer)return;const selector='[data-create-product],[data-add-component],[data-remove-component],[data-add-material],[data-edit-material],[data-delete-material],[data-delete-product],[data-duplicate],[data-remove-image],#productName,#roundingInput,#targetPriceInput,[data-field],[data-cost-field],.image-upload-button';$$(selector,$("#appShell")).forEach(el=>{if("disabled" in el)el.disabled=true;else el.classList.add("control-disabled");});}
 
 function pageHeading(kicker,title,desc,action=""){
   return `<div class="page-heading"><div><span class="eyebrow">${kicker}</span><h1>${title}</h1><p>${desc}</p></div>${action||`<span class="date-chip">${new Intl.DateTimeFormat("vi-VN",{day:"2-digit",month:"long",year:"numeric"}).format(new Date())}</span>`}</div>`;
@@ -171,13 +195,25 @@ function renderMaterials(filter=""){
   $("#materialsView").innerHTML=`${pageHeading("DANH MỤC GỐC","Kho vật tư","Cập nhật một lần, mọi mẫu dùng vật tư đó sẽ tự tính lại.",`<button class="primary-button" data-add-material>＋ Thêm vật tư</button>`)}<div class="section-toolbar"><div class="search-wrap"><input id="materialSearch" value="${escapeAttr(filter)}" placeholder="Tìm vật tư, đơn vị, ghi chú..." /></div><span class="date-chip">${list.length} vật tư</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Hạng mục</th><th class="number">Tổng chi phí</th><th class="number">Số lượng</th><th>Đơn vị</th><th class="number">Đơn giá / 1</th><th></th></tr></thead><tbody>${list.map(m=>`<tr><td class="material-name"><strong>${escapeHtml(m.name)}</strong>${m.note?`<small>${escapeHtml(m.note)}</small>`:""}</td><td class="number">${money(m.cost)}</td><td class="number">${number(m.quantity)}</td><td>${escapeHtml(m.unit)}</td><td class="number"><strong>${money(unitPrice(m))}</strong></td><td><div class="row-actions"><button class="mini-btn" data-edit-material="${m.id}">Sửa</button><button class="mini-btn" data-delete-material="${m.id}">Xoá</button></div></td></tr>`).join("")}</tbody></table></div>`;
 }
 
+function renderMembers(){
+  const owner=currentMember?.role==="owner";
+  $("#membersView").innerHTML=`${pageHeading("WORKSPACE CHUNG","Thành viên xưởng",`Mọi người đăng nhập Google riêng và cùng làm trên “${escapeHtml(activeWorkspace?.name||"Xưởng")}”.`,owner?`<span class="workspace-role">Bạn là chủ xưởng</span>`:`<span class="workspace-role">Quyền ${currentMember?.role==="viewer"?"chỉ xem":"chỉnh sửa"}</span>`)}
+    <div class="members-layout"><section class="panel"><div class="panel-head"><h3>${workspaceMembers.length} thành viên</h3><span class="member-hint">Dữ liệu cập nhật cho tất cả tài khoản</span></div><div class="member-list">${workspaceMembers.map(m=>memberRow(m)).join("")}</div></section>
+    <aside class="invite-card ${owner?"":"disabled"}"><span class="eyebrow">MỜI VÀO XƯỞNG</span><h2>${owner?"Thêm người nhà":"Chỉ chủ xưởng được mời"}</h2><p>${owner?"Nhập đúng email Google của người nhận, rồi gửi link được tạo.":"Nhờ chủ workspace tạo link mời thành viên mới."}</p>${owner?`<form id="inviteForm"><label>Email Google<input id="inviteEmail" type="email" required placeholder="vo-ban@gmail.com"></label><label>Quyền truy cập<select id="inviteRole"><option value="editor">Được chỉnh sửa</option><option value="viewer">Chỉ xem</option></select></label><button class="primary-button" type="submit">Tạo link mời</button></form><div id="inviteResult" class="invite-result" hidden><span>Link dùng cho đúng email vừa nhập</span><div><input id="inviteLinkOutput" readonly><button id="copyInviteBtn" class="secondary-button">Sao chép</button></div></div>`:""}</aside></div>`;
+}
+function memberRow(m){const role={owner:"Chủ xưởng",editor:"Chỉnh sửa",viewer:"Chỉ xem"}[m.role]||m.role;return `<div class="member-row"><span class="member-avatar">${m.photoURL?`<img src="${escapeAttr(m.photoURL)}" alt="">`:escapeHtml((m.displayName||m.email||"?").slice(0,1).toUpperCase())}</span><div><strong>${escapeHtml(m.displayName||"Thành viên")}${m.id===currentUser?.uid?" · Bạn":""}</strong><small>${escapeHtml(m.email||"")}</small></div><span class="member-role ${m.role}">${role}</span></div>`;}
+
+async function createInvite(email,role){if(currentMember?.role!=="owner")throw new Error("workspace/no-access");const token=(crypto.randomUUID()+crypto.randomUUID()).replaceAll("-","").slice(0,40);await setDoc(doc(db,"invites",token),{workspaceId:activeWorkspaceId,workspaceName:activeWorkspace?.name||"Xưởng gia đình",email:email.trim().toLowerCase(),role,createdBy:currentUser.uid,createdAt:serverTimestamp()});return `${location.origin}${location.pathname}?invite=${token}`;}
+
 function openMaterialDialog(id){const m=state.materials.find(x=>x.id===id);$("#materialDialogTitle").textContent=m?"Chỉnh vật tư":"Thêm vật tư";$("#materialId").value=m?.id||"";$("#materialName").value=m?.name||"";$("#materialCost").value=m?.cost||"";$("#materialQuantity").value=m?.quantity||"";$("#materialUnit").value=m?.unit||"";$("#materialNote").value=m?.note||"";updateUnitPreview();$("#materialDialog").showModal();}
 function updateUnitPreview(){const c=Number($("#materialCost").value)||0,q=Number($("#materialQuantity").value)||0;$("#unitPricePreview").textContent=money(q?c/q:0);}
 function deleteMaterial(id){const m=state.materials.find(x=>x.id===id);const usage=state.products.reduce((n,p)=>n+p.components.filter(c=>c.materialId===id).length,0);confirm(`Xoá “${m.name}”?`,usage?`Vật tư này đang được dùng ở ${usage} cấu phần. Các dòng đó sẽ được giữ lại nhưng không còn đơn giá.`:"Thao tác này không thể hoàn tác.",()=>{state.materials=state.materials.filter(x=>x.id!==id);saveState();renderMaterials();toast("Đã xoá vật tư");});}
 function confirm(title,message,cb){$("#confirmTitle").textContent=title;$("#confirmMessage").textContent=message;confirmCallback=cb;$("#confirmDialog").showModal();}
 
 document.addEventListener("click",e=>{
+  if(e.target.closest("#loginGoogleBtn")){handleAuthClick();return;}
   if(e.target.closest("#authBtn")){handleAuthClick();return;}
+  if(e.target.closest("#copyInviteBtn")){const field=$("#inviteLinkOutput");navigator.clipboard.writeText(field.value).then(()=>toast("Đã sao chép link mời"));return;}
   const nav=e.target.closest("[data-view]");if(nav){navigate(nav.dataset.view);return;}
   const go=e.target.closest("[data-go]");if(go){navigate(go.dataset.go);return;}
   const product=e.target.closest("[data-product-id]");if(product && !e.target.closest("[data-duplicate]")){navigate("editor",product.dataset.productId);return;}
@@ -194,6 +230,8 @@ document.addEventListener("click",e=>{
   if(e.target.closest("[data-close-dialog]")){e.target.closest("dialog").close();return;}
   if(e.target.closest("#menuBtn")){$(".sidebar").classList.toggle("open");return;}
 });
+
+document.addEventListener("submit",async e=>{if(e.target.id!=="inviteForm")return;e.preventDefault();const button=e.target.querySelector('button[type="submit"]');button.disabled=true;button.textContent="Đang tạo…";try{const link=await createInvite($("#inviteEmail").value,$("#inviteRole").value);$("#inviteLinkOutput").value=link;$("#inviteResult").hidden=false;button.textContent="Tạo link khác";}catch(error){console.error(error);toast(firebaseErrorMessage(error));button.textContent="Tạo link mời";}button.disabled=false;});
 
 document.addEventListener("input",e=>{
   if(e.target.id==="productSearch"){renderProducts(e.target.value);$("#productSearch").focus();return;}
@@ -214,11 +252,12 @@ $("#confirmDialog").addEventListener("close",()=>{if($("#confirmDialog").returnV
 $("#exportBtn").addEventListener("click",()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`xuong-nho-du-lieu-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href);toast("Đã xuất bản sao dữ liệu");});
 $("#importInput").addEventListener("change",async e=>{try{const data=JSON.parse(await e.target.files[0].text());if(!Array.isArray(data.materials)||!Array.isArray(data.products))throw Error();data.products.forEach(normalizeProduct);state=data;saveState();if(currentUser&&cloudReady)for(const p of state.products)if(p.image)await syncImage(p.id,p.image);navigate("dashboard");toast("Đã nhập dữ liệu");}catch(err){toast("File dữ liệu không hợp lệ");}e.target.value="";});
 
-async function handleAuthClick(){if(location.protocol==="file:"){toast("Đăng nhập cloud cần mở qua GitHub Pages hoặc localhost");return;}try{if(currentUser)await signOut(auth);else await signInWithPopup(auth,googleProvider);}catch(error){console.error(error);toast(firebaseErrorMessage(error));}}
+async function handleAuthClick(){if(location.protocol==="file:"){toast("Đăng nhập cloud cần mở qua GitHub Pages hoặc localhost");return;}try{if(currentUser&&$("#appShell").classList.contains("is-hidden"))await bootstrapWorkspace(currentUser);else if(currentUser)await signOut(auth);else await signInWithPopup(auth,googleProvider);}catch(error){console.error(error);toast(firebaseErrorMessage(error));}}
 
 function compactMoney(n){n=Number(n)||0;if(n>=1e9)return `${number(n/1e9)} tỷ`;if(n>=1e6)return `${number(n/1e6)} triệu`;if(n>=1000)return `${number(n/1000)}K`;return money(n);}
 function escapeHtml(v=""){return String(v).replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function escapeAttr(v=""){return escapeHtml(v);}
 
-updatePills();navigate("dashboard");updateAuthUI(null);
-onAuthStateChanged(auth,async user=>{currentUser=user;updateAuthUI(user);if(user)await loadCloudState(user);else{cloudReady=false;clearTimeout(syncTimer);}});
+updatePills();navigate("dashboard");showLogin();
+if(inviteTokenFromUrl)$("#inviteNotice").hidden=false;
+onAuthStateChanged(auth,async user=>{currentUser=user;if(user){showLoginLoading("Đang xác thực tài khoản…");await bootstrapWorkspace(user);}else{cloudReady=false;activeWorkspaceId=null;activeWorkspace=null;currentMember=null;workspaceMembers=[];clearTimeout(syncTimer);showLogin();}});

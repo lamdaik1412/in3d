@@ -2,9 +2,84 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function memberPath(workspaceId) {
+      return /databases/$(database)/documents/workspaces/$(workspaceId)/members/$(request.auth.uid);
+    }
+
+    function isMember(workspaceId) {
+      return signedIn() && exists(memberPath(workspaceId));
+    }
+
+    function memberRole(workspaceId) {
+      return get(memberPath(workspaceId)).data.role;
+    }
+
+    function canEdit(workspaceId) {
+      return isMember(workspaceId)
+        && memberRole(workspaceId) in ['owner', 'editor'];
+    }
+
+    function isOwner(workspaceId) {
+      return isMember(workspaceId) && memberRole(workspaceId) == 'owner';
+    }
+
+    // Hồ sơ cá nhân và đường dẫn dữ liệu cũ để app tự migrate.
     match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null
-                         && request.auth.uid == userId;
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /workspaces/{workspaceId} {
+      allow create: if signedIn()
+                    && request.resource.data.ownerId == request.auth.uid;
+      allow read: if isMember(workspaceId);
+      allow update, delete: if isOwner(workspaceId);
+
+      match /members/{memberId} {
+        allow read: if isMember(workspaceId);
+        allow create: if signedIn() && (
+          // Chủ xưởng tạo membership đầu tiên trong cùng một batch.
+          (memberId == request.auth.uid
+            && getAfter(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid)
+          ||
+          // Người được mời tự tham gia bằng đúng email và invite token.
+          (memberId == request.auth.uid
+            && request.resource.data.inviteToken is string
+            && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteToken)).data.workspaceId == workspaceId
+            && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteToken)).data.email == request.auth.token.email)
+          || isOwner(workspaceId)
+        );
+        allow update, delete: if isOwner(workspaceId);
+      }
+
+      match /app/{documentId} {
+        allow read: if isMember(workspaceId);
+        allow write: if canEdit(workspaceId);
+      }
+
+      match /images/{imageId} {
+        allow read: if isMember(workspaceId);
+        allow create, update: if canEdit(workspaceId)
+          && request.resource.data.dataUrl is string
+          && request.resource.data.dataUrl.size() < 900000;
+        allow delete: if canEdit(workspaceId);
+      }
+    }
+
+    match /invites/{inviteToken} {
+      allow create: if signedIn()
+                    && isOwner(request.resource.data.workspaceId)
+                    && request.resource.data.email is string
+                    && request.resource.data.role in ['editor', 'viewer'];
+      allow read: if signedIn() && (
+        resource.data.createdBy == request.auth.uid
+        || resource.data.email == request.auth.token.email
+      );
+      allow delete: if signedIn() && isOwner(resource.data.workspaceId);
+      allow update: if false;
     }
   }
 }

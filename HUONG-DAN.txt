@@ -11,3 +11,11 @@ XƯỞNG NHỎ — CÂN ĐỐI CHI PHÍ
 8. Nên bấm “Xuất dữ liệu” định kỳ để có file JSON dự phòng. Có thể nhập lại file này bằng nút “Nhập dữ liệu”.
 
 Lưu ý: Nếu chuyển sang máy hoặc trình duyệt khác, hãy xuất dữ liệu ở máy cũ và nhập vào máy mới.
+
+WORKSPACE GIA ĐÌNH
+
+- Mỗi người đăng nhập bằng tài khoản Google riêng.
+- Chủ xưởng mở trang “Thành viên”, nhập đúng email Google và tạo link mời.
+- Người nhận mở link rồi đăng nhập đúng email được mời.
+- Owner và Editor có thể chỉnh sửa; Viewer chỉ xem.
+- Dữ liệu cũ trong users/{uid} được tự chuyển vào workspace của chủ xưởng ở lần đăng nhập đầu tiên.

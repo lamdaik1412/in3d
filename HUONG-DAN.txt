@@ -19,3 +19,14 @@ WORKSPACE GIA ĐÌNH
 - Người nhận mở link rồi đăng nhập đúng email được mời.
 - Owner và Editor có thể chỉnh sửa; Viewer chỉ xem.
 - Dữ liệu cũ trong users/{uid} được tự chuyển vào workspace của chủ xưởng ở lần đăng nhập đầu tiên.
+
+MẪU MỚI
+
+- Khi chỉnh “Máy, nhân công và phụ phí”, app tự ghi nhớ bộ giá trị mới nhất.
+- Mẫu được tạo sau đó sẽ nạp sẵn các giá trị này, gồm khấu hao máy, điện, nhân công, hao hụt, đóng gói, vận chuyển, phí sàn, lợi nhuận mục tiêu và bước làm tròn.
+
+NỘI DUNG CHO CỘNG TÁC VIÊN
+
+- Trong trang chỉnh từng sản phẩm có ba ô sao chép: Giá đăng bán, Tiêu đề mẫu và Mô tả mẫu.
+- Tiêu đề và mô tả được lưu theo sản phẩm, đồng bộ cho cả workspace.
+- Thành viên có quyền chỉ xem vẫn có thể bấm sao chép để đăng bài nhưng không sửa nội dung.

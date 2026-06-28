@@ -1,0 +1,13 @@
+XƯỞNG NHỎ — CÂN ĐỐI CHI PHÍ
+
+1. Mở file index.html bằng Chrome, Edge hoặc Firefox.
+2. Vào “Kho vật tư” để cập nhật giá mua và số lượng. Đơn giá được tự tính.
+3. Vào “Mẫu sản phẩm”, chọn một mẫu rồi nhập lượng vật tư và số giờ máy cho từng cấu phần.
+4. Điền khấu hao máy/giờ, công suất điện, nhân công, hao hụt, đóng gói, vận chuyển, phí sàn và lợi nhuận mục tiêu.
+5. Bấm “Ảnh sản phẩm” để thêm ảnh. Ảnh được tự thu nhỏ trước khi lưu trên máy.
+6. Giá thành đầy đủ và giá bán gợi ý cập nhật tức thì. Giá gợi ý được tính theo công thức:
+   Tổng giá thành / (1 - % phí sàn - % lợi nhuận mục tiêu).
+7. Dữ liệu tự lưu trong trình duyệt trên máy đang dùng.
+8. Nên bấm “Xuất dữ liệu” định kỳ để có file JSON dự phòng. Có thể nhập lại file này bằng nút “Nhập dữ liệu”.
+
+Lưu ý: Nếu chuyển sang máy hoặc trình duyệt khác, hãy xuất dữ liệu ở máy cũ và nhập vào máy mới.

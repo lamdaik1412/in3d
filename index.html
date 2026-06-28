@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f5f4ef" />
+  <title>Xưởng Nhỏ — Cân đối chi phí</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <button class="brand" data-view="dashboard" aria-label="Về tổng quan">
+        <span class="brand-mark">X</span>
+        <span><strong>XƯỞNG NHỎ</strong><small>Cost studio</small></span>
+      </button>
+
+      <nav class="main-nav" aria-label="Điều hướng chính">
+        <button class="nav-item active" data-view="dashboard"><span class="icon">⌂</span>Tổng quan</button>
+        <button class="nav-item" data-view="products"><span class="icon">◇</span>Mẫu sản phẩm<span id="productCountPill" class="pill"></span></button>
+        <button class="nav-item" data-view="materials"><span class="icon">▦</span>Kho vật tư<span id="materialCountPill" class="pill"></span></button>
+      </nav>
+
+      <div class="sidebar-note">
+        <span class="status-dot"></span>
+        <div><strong>Đã lưu trên máy</strong><small>Dữ liệu tự lưu khi chỉnh sửa</small></div>
+      </div>
+
+      <div class="sidebar-actions">
+        <button id="exportBtn" class="text-button">↓ Xuất dữ liệu</button>
+        <label class="text-button file-label">↑ Nhập dữ liệu<input id="importInput" type="file" accept="application/json" hidden /></label>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <button id="menuBtn" class="menu-btn" aria-label="Mở menu">☰</button>
+        <div id="breadcrumb" class="breadcrumb">Tổng quan</div>
+        <div class="topbar-right"><span id="syncState" class="save-state"><i></i>Lưu trên máy</span><button id="authBtn" class="auth-button">Đăng nhập Google</button><button id="quickAddBtn" class="primary-button">＋ Tạo mẫu mới</button></div>
+      </header>
+
+      <section id="dashboardView" class="view active"></section>
+      <section id="productsView" class="view"></section>
+      <section id="editorView" class="view"></section>
+      <section id="materialsView" class="view"></section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <dialog id="materialDialog">
+    <form id="materialForm" method="dialog" class="dialog-card">
+      <div class="dialog-head"><div><span class="eyebrow">KHO VẬT TƯ</span><h2 id="materialDialogTitle">Thêm vật tư</h2></div><button type="button" class="icon-button" data-close-dialog>×</button></div>
+      <input id="materialId" type="hidden" />
+      <label>Tên vật tư<input id="materialName" required maxlength="80" placeholder="Ví dụ: PETG WOOD" /></label>
+      <div class="form-grid">
+        <label>Tổng chi phí<input id="materialCost" type="number" min="0" step="100" required /></label>
+        <label>Số lượng<input id="materialQuantity" type="number" min="0.001" step="0.001" required /></label>
+      </div>
+      <div class="form-grid">
+        <label>Đơn vị<input id="materialUnit" required maxlength="20" placeholder="GRAM, CÁI..." /></label>
+        <label>Ghi chú<input id="materialNote" maxlength="100" placeholder="Không bắt buộc" /></label>
+      </div>
+      <div class="unit-price-preview">Đơn giá dự kiến <strong id="unitPricePreview">0 ₫</strong></div>
+      <div class="dialog-actions"><button type="button" class="secondary-button" data-close-dialog>Huỷ</button><button class="primary-button" value="save">Lưu vật tư</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="confirmDialog">
+    <form method="dialog" class="dialog-card compact">
+      <h2 id="confirmTitle">Xác nhận</h2><p id="confirmMessage"></p>
+      <div class="dialog-actions"><button class="secondary-button" value="cancel">Huỷ</button><button id="confirmAction" class="danger-button" value="confirm">Xoá</button></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

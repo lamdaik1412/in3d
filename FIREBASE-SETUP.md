@@ -46,3 +46,14 @@ workspaces/{workspaceId}
 users/{uid}/profile/main
 invites/{inviteToken}
 ```
+
+## Cách dùng phần giá mới
+
+1. Vào **Kênh bán & Phí** để tạo profile cho Facebook/Zalo, Shopee, TikTok Shop, CTV hoặc khách sỉ.
+2. Trong **Mẫu sản phẩm**, chọn profile mặc định cho từng sản phẩm và nhập phí override nếu cần.
+3. Trong trang chỉnh mẫu, đọc:
+   - **Giá hòa vốn**: không lỗ.
+   - **Giá bán an toàn**: đạt margin mục tiêu và lợi nhuận tối thiểu.
+   - **Kịch bản sale**: nhập voucher để xem giá sale thấp nhất không lỗ.
+4. Kho vật tư có thêm category để hao hụt nhựa chỉ áp dụng cho `print_material`.
+5. Export/Import JSON sẽ giữ cả profile bán hàng, category vật tư và cấu trúc costing mới.

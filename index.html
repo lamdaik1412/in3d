@@ -35,6 +35,7 @@
         <button class="nav-item active" data-view="dashboard"><span class="icon">⌂</span>Tổng quan</button>
         <button class="nav-item" data-view="products"><span class="icon">◇</span>Mẫu sản phẩm<span id="productCountPill" class="pill"></span></button>
         <button class="nav-item" data-view="materials"><span class="icon">▦</span>Kho vật tư<span id="materialCountPill" class="pill"></span></button>
+        <button class="nav-item" data-view="channels"><span class="icon">≋</span>Kênh bán &amp; Phí<span id="channelCountPill" class="pill"></span></button>
         <button class="nav-item" data-view="members"><span class="icon">◎</span>Thành viên<span id="memberCountPill" class="pill">1</span></button>
       </nav>
 
@@ -60,6 +61,7 @@
       <section id="productsView" class="view"></section>
       <section id="editorView" class="view"></section>
       <section id="materialsView" class="view"></section>
+      <section id="channelsView" class="view"></section>
       <section id="membersView" class="view"></section>
     </main>
   </div>
@@ -72,15 +74,70 @@
       <input id="materialId" type="hidden" />
       <label>Tên vật tư<input id="materialName" required maxlength="80" placeholder="Ví dụ: PETG WOOD" /></label>
       <div class="form-grid">
+        <label>Category
+          <select id="materialCategory">
+            <option value="print_material">print_material</option>
+            <option value="purchased_component">purchased_component</option>
+            <option value="packaging">packaging</option>
+            <option value="finishing_supply">finishing_supply</option>
+            <option value="consumable">consumable</option>
+            <option value="other">other</option>
+          </select>
+        </label>
+        <label>Nhà cung cấp<input id="materialSupplier" maxlength="80" placeholder="Không bắt buộc" /></label>
+      </div>
+      <div class="form-grid">
         <label>Tổng chi phí<input id="materialCost" type="number" min="0" step="100" required /></label>
         <label>Số lượng<input id="materialQuantity" type="number" min="0.001" step="0.001" required /></label>
       </div>
       <div class="form-grid">
         <label>Đơn vị<input id="materialUnit" required maxlength="20" placeholder="GRAM, CÁI..." /></label>
+        <label>Ngày mua gần nhất<input id="materialLastPurchasedAt" type="date" /></label>
+      </div>
+      <div class="form-grid">
+        <label>Mức tồn tối thiểu<input id="materialMinStock" type="number" min="0" step="0.01" /></label>
         <label>Ghi chú<input id="materialNote" maxlength="100" placeholder="Không bắt buộc" /></label>
+      </div>
+      <div class="form-grid checkbox-grid">
+        <label><input id="materialAppliesPrintWaste" type="checkbox" /> Áp dụng hao hụt in</label>
+        <label><input id="materialAppliesMachineCosts" type="checkbox" /> Áp dụng chi phí máy/điện</label>
       </div>
       <div class="unit-price-preview">Đơn giá dự kiến <strong id="unitPricePreview">0 ₫</strong></div>
       <div class="dialog-actions"><button type="button" class="secondary-button" data-close-dialog>Huỷ</button><button class="primary-button" value="save">Lưu vật tư</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="profileDialog">
+    <form id="profileForm" method="dialog" class="dialog-card">
+      <div class="dialog-head"><div><span class="eyebrow">KÊNH BÁN &amp; PHÍ</span><h2 id="profileDialogTitle">Thêm profile</h2></div><button type="button" class="icon-button" data-close-dialog>×</button></div>
+      <input id="profileId" type="hidden" />
+      <label>Tên kênh<input id="profileName" required maxlength="80" placeholder="Ví dụ: Shopee" /></label>
+      <label>Ghi chú<textarea id="profileNote" rows="3" maxlength="240" placeholder="Mô tả ngắn về kênh bán"></textarea></label>
+      <div class="form-grid">
+        <label>Bước làm tròn giá<input id="profileRoundingStep" type="number" min="1" step="100" /></label>
+        <label>Phí cố định mỗi đơn<input id="profileFixedFee" type="number" min="0" step="100" /></label>
+      </div>
+      <div class="form-grid">
+        <label>Phí tỷ lệ doanh thu (%)<input id="profileVariableFeeRate" type="number" min="0" step="0.1" /></label>
+        <label>Hỗ trợ ship mặc định<input id="profileShippingSupport" type="number" min="0" step="1000" /></label>
+      </div>
+      <div class="form-grid">
+        <label>Voucher shop chịu mặc định (%)<input id="profileVoucherPercent" type="number" min="0" max="100" step="0.1" /></label>
+        <label>Voucher shop chịu mặc định (₫)<input id="profileVoucherFixed" type="number" min="0" step="100" /></label>
+      </div>
+      <div class="form-grid">
+        <label>Dự phòng hoàn hàng (%)<input id="profileReturnReserveRate" type="number" min="0" step="0.1" /></label>
+        <label>Affiliate/KOC (%)<input id="profileAffiliateRate" type="number" min="0" step="0.1" /></label>
+      </div>
+      <div class="form-grid">
+        <label>Quảng cáo bình quân (₫)<input id="profileAdsVnd" type="number" min="0" step="100" /></label>
+        <label>Thuế/khấu trừ (%)<input id="profileTaxRate" type="number" min="0" step="0.1" /></label>
+      </div>
+      <div class="form-grid">
+        <label>Margin mục tiêu (%)<input id="profileTargetMarginRate" type="number" min="0" max="90" step="0.1" /></label>
+        <label>Lợi nhuận tối thiểu (₫)<input id="profileMinimumProfitVnd" type="number" min="0" step="1000" /></label>
+      </div>
+      <div class="dialog-actions"><button type="button" class="secondary-button" data-close-dialog>Huỷ</button><button class="primary-button" value="save">Lưu profile</button></div>
     </form>
   </dialog>
 

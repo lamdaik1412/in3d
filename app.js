@@ -180,6 +180,62 @@ function navigate(view, productId) { currentView = view; if (productId) currentP
 function totalInvestment() { return state.materials.reduce((sum, m) => sum + num(m.cost), 0); }
 function priceForProduct(product) { const pricing = productionAndPricing(product, resolveSalesSettings(product)); return pricing.roundedSafePrice || pricing.suggestedListing || pricing.breakevenPrice || 0; }
 function productRow(product, index) { const pricing = productionAndPricing(product, resolveSalesSettings(product)); return `<div class="product-row" data-product-id="${product.id}"><span class="product-avatar ${product.image ? "has-image" : ""}">${productVisual(product, String(index + 1).padStart(2, "0"))}</span><div class="product-name"><strong>${escapeHtml(product.name)}</strong><small>${product.components.length} cấu phần · ${number(productPrintHours(product))} giờ máy</small></div><div class="cost-cell"><span class="cell-label">Giá vốn</span><span class="money">${money(pricing.breakdown.productionTotal + pricing.fixedOrder)}</span></div><div class="optional-cell"><span class="cell-label">Giá an toàn</span><span class="money">${money(pricing.roundedSafePrice || 0)}</span></div><span class="price-tag">${product.targetPrice ? compactMoney(product.targetPrice) : "Chưa chốt"}</span></div>`; }
+function renderProducts(filter = "") {
+  const keyword = filter.trim().toLowerCase();
+  const list = state.products.filter(p => [p.name, p.listing?.title, ...(p.components || []).map(c => c.name)].join(" ").toLowerCase().includes(keyword));
+  $("#productsView").innerHTML = `${pageHeading("MẪU SẢN PHẨM", "Thư viện sản phẩm", "Quản lý định mức theo từng mẫu, rồi mở chi tiết để tính giá vốn và giá bán.", `<button class="primary-button" data-create-product>＋ Tạo mẫu</button>`)}<div class="section-toolbar"><div class="search-wrap"><input id="productSearch" value="${escapeAttr(filter)}" placeholder="Tìm theo tên mẫu hoặc cấu phần..." /></div><span class="date-chip">${list.length} mẫu</span></div><div class="product-grid">${list.map((p, i) => { const pricing = productionAndPricing(p, resolveSalesSettings(p)); const status = targetPriceStatus(p); return `<article class="product-card" data-product-id="${p.id}"><div class="product-cover ${p.image ? "has-image" : ""}">${productVisual(p, "NO IMAGE")}</div><div class="product-card-body"><div class="product-card-top"><span class="product-index">#${String(i + 1).padStart(2, "0")}</span><button class="card-menu" data-duplicate="${p.id}" title="Nhân bản mẫu">⧉</button></div><h3>${escapeHtml(p.name)}</h3><p>${p.components.length} cấu phần · ${number(productPrintHours(p))} giờ máy</p><div class="card-stats"><div><strong>${money(pricing.breakdown.productionTotal + pricing.fixedOrder)}</strong><span>Giá vốn + phí cố định</span></div><div><strong>${money(pricing.roundedSafePrice || 0)}</strong><span>Giá an toàn</span></div></div><div class="profile-mini">${status.label} · ${escapeHtml(status.note)}</div></div></article>`; }).join("")}<article class="product-card new-card" data-create-product><div><b>＋</b><h3>Tạo mẫu mới</h3><p>Dùng thông số mẫu gần nhất để bắt đầu nhanh.</p></div></article></div>`;
+}
+function createProduct() {
+  if (!canEdit()) { toast("Bạn đang có quyền chỉ xem"); return; }
+  const defaults = templateDefaults();
+  const name = `Mẫu mới ${state.products.length + 1}`;
+  const product = normalizeProduct({
+    id: uid(),
+    name,
+    rounding: defaults.rounding,
+    targetPrice: 0,
+    salesProfileId: defaults.salesProfileId || state.salesProfiles[0]?.id || "",
+    salesOverrides: {},
+    saleScenario: defaultSaleScenario(),
+    costing: clone(defaults.costing),
+    listing: { title: name, description: "" },
+    batch: {
+      batchQty: Math.max(1, num(defaults.costing.batchQty, 1)),
+      batchSetupCostVnd: Math.max(0, num(defaults.costing.batchSetupCostVnd)),
+      batchPurgeGrams: Math.max(0, num(defaults.costing.batchPurgeGrams)),
+      batchSetupHours: Math.max(0, num(defaults.costing.batchSetupHours)),
+      batchExpectedSalesQty: Math.max(1, num(defaults.costing.batchExpectedSalesQty, 1))
+    },
+    components: [{ id: uid(), name: "Cấu phần chính", materialId: state.materials[0]?.id || "", quantity: 1, printHours: 0 }]
+  });
+  state.products.unshift(product);
+  currentProductId = product.id;
+  rememberTemplateDefaults(product);
+  saveState();
+  navigate("editor", product.id);
+  toast("Đã tạo mẫu mới");
+}
+function duplicateProduct(id) {
+  if (!canEdit()) { toast("Bạn đang có quyền chỉ xem"); return; }
+  const source = state.products.find(p => p.id === id);
+  if (!source) return;
+  const copy = normalizeProduct({
+    ...clone(source),
+    id: uid(),
+    name: `${source.name} (copy)`,
+    listing: {
+      title: source.listing?.title && source.listing.title !== source.name ? source.listing.title : `${source.name} (copy)`,
+      description: source.listing?.description || ""
+    }
+  });
+  state.products.unshift(copy);
+  currentProductId = copy.id;
+  rememberTemplateDefaults(copy);
+  saveState();
+  if (copy.image) syncImage(copy.id, copy.image);
+  navigate("editor", copy.id);
+  toast("Đã nhân bản mẫu");
+}
 function renderDashboard() { const products = [...state.products].sort((a, b) => priceForProduct(b) - priceForProduct(a)); const avg = products.length ? products.reduce((s, p) => s + (priceForProduct(p) || 0), 0) / products.length : 0; const topMaterials = [...state.materials].sort((a, b) => b.cost - a.cost).slice(0, 4); const max = topMaterials[0]?.cost || 1; $("#dashboardView").innerHTML = `${pageHeading("BẢNG ĐIỀU KHIỂN", "Chào xưởng, hôm nay tính gì?", "Mọi con số được cập nhật trực tiếp từ kho vật tư, profile kênh bán và định mức sản phẩm.")}<div class="kpi-grid"><article class="kpi-card accent"><span class="kpi-label">Tổng vốn đã nhập</span><strong class="kpi-value">${compactMoney(totalInvestment())}</strong><span class="kpi-meta">${state.materials.length} vật tư · ${state.salesProfiles.length} profile</span></article><article class="kpi-card"><span class="kpi-label">Mẫu sản phẩm</span><strong class="kpi-value">${state.products.length}</strong><span class="kpi-meta">Chọn mẫu để xem giá theo kênh</span></article><article class="kpi-card"><span class="kpi-label">Giá bán gợi ý TB</span><strong class="kpi-value">${compactMoney(avg)}</strong><span class="kpi-meta">Đã gồm phí và margin theo profile</span></article><article class="kpi-card"><span class="kpi-label">Vật tư lớn nhất</span><strong class="kpi-value">${compactMoney(topMaterials[0]?.cost || 0)}</strong><span class="kpi-meta">${escapeHtml(topMaterials[0]?.name || "Chưa có")}</span></article></div><div class="dashboard-grid"><article class="panel"><div class="panel-head"><h3>Mẫu sản phẩm gần đây</h3><button class="link-button" data-go="products">Xem tất cả</button></div><div>${products.slice(0, 5).map((p, i) => productRow(p, i)).join("") || `<div class="empty-state">Chưa có mẫu nào.</div>`}</div></article><article class="panel"><div class="panel-head"><h3>Khoản đầu tư lớn</h3><button class="link-button" data-go="materials">Mở kho</button></div><div class="material-bars">${topMaterials.map(m => `<div class="bar-item"><div class="bar-item-head"><span>${escapeHtml(m.name)}</span><strong>${compactMoney(m.cost)}</strong></div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(5, m.cost / max * 100)}%"></div></div></div>`).join("")}</div></article></div>`; }
 function warningPills(warnings) { if (!warnings.length) return `<div class="summary-note success">Không có cảnh báo.</div>`; return `<div class="warning-stack">${warnings.map(w => `<div class="warning-item">⚠ ${escapeHtml(w)}</div>`).join("")}</div>`; }
 function renderChannelCards(product) { return state.salesProfiles.map(profile => { const calc = productionAndPricing(product, resolveSalesSettings(product, profile)); return `<article class="channel-card"><div class="channel-card-head"><div><strong>${escapeHtml(profile.name)}</strong><small>${escapeHtml(profile.note || "Không có ghi chú")}</small></div><span class="status-chip">${money(calc.roundedSafePrice || 0)}</span></div><div class="channel-card-grid"><div><span>Hòa vốn</span><strong>${money(calc.breakevenPrice || 0)}</strong></div><div><span>Giá an toàn</span><strong>${money(calc.roundedSafePrice || 0)}</strong></div><div><span>Giá sale thấp nhất</span><strong>${money(calc.minNoLossSale || 0)}</strong></div><div><span>Niêm yết đề xuất</span><strong>${money(calc.suggestedListing || 0)}</strong></div><div><span>Phí dự kiến</span><strong>${money(calc.fixedOrder + (calc.suggestedListing || 0) * calc.rVariable)}</strong></div><div><span>Lợi nhuận dự kiến</span><strong>${money((calc.suggestedListing || 0) * (1 - calc.rVariable) - calc.fixedOrder - calc.breakdown.productionTotal)}</strong></div><div><span>Margin dự kiến</span><strong>${number((calc.suggestedListing || 0) ? (((calc.suggestedListing || 0) * (1 - calc.rVariable) - calc.fixedOrder - calc.breakdown.productionTotal) / (calc.suggestedListing || 1)) * 100 : 0)}%</strong></div><div><span>Step</span><strong>${money(resolveSalesSettings(product, profile).roundingStep)}</strong></div></div></article>`; }).join(""); }
